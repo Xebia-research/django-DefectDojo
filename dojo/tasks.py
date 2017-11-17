@@ -10,11 +10,10 @@ from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
 from django.template.loader import render_to_string
 from django.utils.http import urlencode
-from django.utils import timezone as tz
 from celery.utils.log import get_task_logger
 from celery.decorators import task
 from dojo.models import Finding, Test, Engagement
-from pytz import timezone
+from django.utils import timezone
 
 import pdfkit
 from dojo.celery import app
@@ -24,11 +23,9 @@ from dojo.utils import add_comment, add_epic, add_issue, update_epic, update_iss
 
 logger = get_task_logger(__name__)
 
-localtz = timezone(get_system_setting('time_zone'))
-
 @app.task(bind=True)
 def add_alerts(self, runinterval):
-    now = tz.now()
+    now = timezone.now()
 
     upcoming_engagements = Engagement.objects.filter(target_start__gt=now+timedelta(days=3),target_start__lt=now+timedelta(days=3)+runinterval).order_by('target_start')
     for engagement in upcoming_engagements:
@@ -43,7 +40,7 @@ def add_alerts(self, runinterval):
         target_end__lt=now,
         status='In Progress').order_by('-target_end')
     for eng in stale_engagements:
-        create_notification(event='stale_engagement', 
+        create_notification(event='stale_engagement',
                            title='Stale Engagement: %s' % eng.name,
                            description='The engagement "%s" is stale. Target end was %s.' % (eng.name, eng.target_end.strftime("%b. %d, %Y")),
                            url=reverse('view_engagement', args=(eng.id,)),
@@ -91,7 +88,7 @@ def async_pdf_report(self,
             f = ContentFile(pdf)
             report.file.save(filename, f)
         report.status = 'success'
-        report.done_datetime = datetime.now(tz=localtz)
+        report.done_datetime = timezone.now()
         report.save()
 
         create_notification(event='report_created', title='Report created', description='The report "%s" is ready.' % report.name, url=uri, report=report, objowner=report.requester)
@@ -144,8 +141,12 @@ def async_custom_pdf_report(self,
             toc = {'toc-header-text': toc_settings.title,
                    'xsl-style-sheet': temp.name}
 
+        # default the cover to not come first by default
+        cover_first_val=False
+
         cover = None
         if 'cover-page' in selected_widgets:
+            cover_first_val=True
             cp = selected_widgets['cover-page']
             x = urlencode({'title': cp.title,
                            'subtitle': cp.sub_heading,
@@ -159,9 +160,9 @@ def async_custom_pdf_report(self,
         pdf = pdfkit.from_string(bytes,
                                  False,
                                  configuration=config,
-                                 cover=cover,
                                  toc=toc,
-                                 )
+                                 cover=cover,
+                                 cover_first=cover_first_val)
 
         if report.file.name:
             with open(report.file.path, 'w') as f:
@@ -171,7 +172,7 @@ def async_custom_pdf_report(self,
             f = ContentFile(pdf)
             report.file.save(filename, f)
         report.status = 'success'
-        report.done_datetime = datetime.now(tz=localtz)
+        report.done_datetime = timezone.now()
         report.save()
 
         create_notification(event='report_created', title='Report created', description='The report "%s" is ready.' % report.name, url=uri, report=report, objowner=report.requester)
@@ -246,4 +247,3 @@ def async_false_history(new_finding, *args, **kwargs):
     if total_findings.count() > 0:
             new_finding.false_p = True
             super(Finding, new_finding).save(*args, **kwargs)
-
