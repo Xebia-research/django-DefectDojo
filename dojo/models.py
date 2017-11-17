@@ -17,12 +17,13 @@ from django.db.models import Q
 from django.utils.timezone import now
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToCover
-from pytz import timezone, all_timezones
+from django.utils import timezone
+from pytz import all_timezones
 from tagging.registry import register as tag_register
 from multiselectfield import MultiSelectField
 
 class System_Settings(models.Model):
-    enable_deduplication = models.BooleanField(default=False, 
+    enable_deduplication = models.BooleanField(default=False,
                                         blank=False,
                                         verbose_name='Deduplicate findings',
                                         help_text='With this setting turned on, Dojo deduplicates findings by comparing endpoints, ' \
@@ -42,8 +43,8 @@ class System_Settings(models.Model):
     enable_mail_notifications = models.BooleanField(default=False, blank=False)
     mail_notifications_from = models.CharField(max_length=200, default='from@example.com', blank=True)
     mail_notifications_to = models.CharField(max_length=200, default='', blank=True)
-    s_finding_severity_naming = models.BooleanField(default=False, 
-                                                    blank=False, 
+    s_finding_severity_naming = models.BooleanField(default=False,
+                                                    blank=False,
                                                     help_text='With this setting turned on, Dojo will display S0, S1, S2, etc ' \
                                                     'in most places, whereas if turned off Critical, High, Medium, etc will be displayed.')
     false_positive_history = models.BooleanField(default=False)
@@ -53,17 +54,11 @@ class System_Settings(models.Model):
                                  choices=[(tz,tz) for tz in all_timezones],
                                  default='UTC',blank=False)
 
-try:
-    localtz = timezone(System_Settings.objects.get().time_zone)
-except:
-    localtz = timezone(System_Settings().time_zone)
-
 def get_current_date():
-    return localtz.normalize(now()).date()
-
+    return timezone.now().date()
 
 def get_current_datetime():
-    return localtz.normalize(now())
+    return timezone.now()
 
 
 # proxy class for convenience and UI
@@ -630,6 +625,12 @@ class Finding(models.Model):
     last_reviewed_by = models.ForeignKey(User, null=True, editable=False, related_name='last_reviewed_by')
     images = models.ManyToManyField('FindingImage', blank=True)
 
+    line_number = models.TextField(null=True, blank=True)
+    sourcefilepath = models.TextField(null=True, blank=True)
+    sourcefile = models.TextField(null=True, blank=True)
+    param = models.TextField(null=True, blank=True)
+    payload = models.TextField(null=True, blank=True)
+
     SEVERITIES = {'Info': 4, 'Low': 3, 'Medium': 2,
                   'High': 1, 'Critical': 0}
 
@@ -678,10 +679,9 @@ class Finding(models.Model):
 
     def age(self):
         if self.mitigated:
-            days = (self.mitigated.date() - localtz.localize(datetime.combine(self.date,
-                                                                              datetime.min.time())).date()).days
+            days = (self.mitigated.date() - datetime.combine(self.date, datetime.min.time()).date()).days
         else:
-            days = (get_current_date() - localtz.localize(datetime.combine(self.date, datetime.min.time())).date()).days
+            days = (get_current_date() - datetime.combine(self.date, datetime.min.time()).date()).days
 
         return days if days > 0 else 0
 
@@ -1108,7 +1108,6 @@ class Alerts(models.Model):
     icon = models.CharField(max_length=25, default='icon-user-check')
     user_id = models.ForeignKey(User, null=True, editable=False)
     created = models.DateTimeField(null=False, editable=False, default=now)
-    display_date = models.DateTimeField(null=False, default=now)
 
     class Meta:
         ordering = ['-created']
