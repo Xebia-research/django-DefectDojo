@@ -60,6 +60,10 @@ def open_findings(request):
                                       duplicate=False,
                                       out_of_scope=False)
 
+    # TEST: Filter for specific product
+    # product = Product.objects.filter(name="Android app").first()    # Grab da product eh
+    # findings = findings.filter(test__engagement__product=product)   # Filter for that product bud
+
     if request.user.is_staff:
         findings = OpenFingingSuperFilter(request.GET, queryset=findings, user=request.user)
     else:
@@ -659,7 +663,7 @@ def promote_to_finding(request, fid):
         jira_available = True
     else:
         jform = None
-        
+
     form = PromoteFindingForm(initial={'title': finding.title,
                                        'date': finding.date,
                                        'severity': finding.severity,

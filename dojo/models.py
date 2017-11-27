@@ -608,7 +608,7 @@ class Finding(models.Model):
     out_of_scope = models.BooleanField(default=False)
     under_review = models.BooleanField(default=False)
     review_requested_by = models.ForeignKey(Dojo_User, null=True, blank=True, related_name='review_requested_by')
-    reviewers = models.ManyToManyField(Dojo_User, blank=True)
+    reviewers = models.ManyToManyField(Dojo_User)
 
     #Defect Tracking Review
     under_defect_review = models.BooleanField(default=False)

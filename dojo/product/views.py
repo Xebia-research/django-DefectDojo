@@ -39,7 +39,11 @@ logger = logging.getLogger(__name__)
 
 def product(request):
     if request.user.is_staff:
+        print "--- USER IS STAFF ---"
+
         initial_queryset = Product.objects.all()
+        # initial_queryset = Product.objects.filter(name="Android app")
+
         name_words = [product.name for product in
                       Product.objects.all()]
     else:
