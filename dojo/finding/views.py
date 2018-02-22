@@ -20,7 +20,7 @@ from django.http import StreamingHttpResponse
 from django.shortcuts import render, get_object_or_404
 from django.utils import formats
 from django.utils.safestring import mark_safe
-from pytz import timezone
+from django.utils import timezone
 
 from dojo.filters import OpenFindingFilter, \
     OpenFingingSuperFilter, AcceptedFingingSuperFilter, \
@@ -36,8 +36,6 @@ from dojo.utils import get_page_items, add_breadcrumb, FileIterWrapper, send_rev
     jira_change_resolution_id, get_jira_connection, get_system_setting, create_notification
 
 from dojo.tasks import add_issue_task, update_issue_task, add_comment_task
-
-localtz = timezone(get_system_setting('time_zone'))
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -73,7 +71,8 @@ def open_findings(request):
                    for word in finding.title.split() if len(word) > 2]
 
     title_words = sorted(set(title_words))
-    paged_findings = get_page_items(request, findings.qs, 25)
+
+    # paged_findings = get_page_items(request, findings.qs, 25)
 
     product_type = None
     if 'test__engagement__product__prod_type' in request.GET:
@@ -83,12 +82,29 @@ def open_findings(request):
 
     add_breadcrumb(title="Open findings", top_level=not len(request.GET), request=request)
 
+    # Init findings lists
+    specificFindings = []
+    generalFindings = []
+
+    # Fill in the findings lists
+    for finding in findings.qs:
+        if request.user.id == finding.reviewer_id:
+            specificFindings.append(finding)
+        else:
+            generalFindings.append(finding)
+
+    # Init paged findings for the front end
+    specific_paged_findings = get_page_items(request, specificFindings, 25)
+    paged_findings = get_page_items(request, generalFindings, 25)
+
+    # Render the front-end by using the paged findings we have created
     return render(request,
                   'dojo/open_findings.html',
-                  {"findings": paged_findings,
-                   "filtered": findings,
-                   "title_words": title_words,
-                   })
+                    {"specificFindings": specific_paged_findings,
+                     "generalFindings": paged_findings,
+                     "filtered": findings,
+                     "title_words": title_words,
+                     })
 
 
 """
@@ -173,7 +189,7 @@ def view_finding(request, fid):
         if form.is_valid():
             new_note = form.save(commit=False)
             new_note.author = request.user
-            new_note.date = datetime.now(tz=localtz)
+            new_note.date = timezone.now()
             new_note.save()
             finding.notes.add(new_note)
             finding.last_reviewed = new_note.date
@@ -223,7 +239,7 @@ def close_finding(request, fid):
         form = CloseFindingForm(request.POST)
 
         if form.is_valid():
-            now = datetime.now(tz=localtz)
+            now = timezone.now()
             new_note = form.save(commit=False)
             new_note.author = request.user
             new_note.date = now
@@ -260,7 +276,7 @@ def defect_finding_review(request, fid):
         form = DefectFindingForm(request.POST)
 
         if form.is_valid():
-            now = datetime.now(tz=localtz)
+            now = timezone.now()
             new_note = form.save(commit=False)
             new_note.author = request.user
             new_note.date = now
@@ -370,7 +386,7 @@ def edit_finding(request, fid):
             new_finding.numerical_severity = Finding.get_numerical_severity(
                 new_finding.severity)
             if new_finding.false_p or new_finding.active is False:
-                new_finding.mitigated = datetime.now(tz=localtz)
+                new_finding.mitigated = timezone.now()
                 new_finding.mitigated_by = request.user
             if new_finding.active is True:
                 new_finding.false_p = False
@@ -381,7 +397,7 @@ def edit_finding(request, fid):
             # always false now since this will be deprecated soon in favor of new Finding_Template model
             new_finding.is_template = False
             new_finding.endpoints = form.cleaned_data['endpoints']
-            new_finding.last_reviewed = datetime.now(tz=localtz)
+            new_finding.last_reviewed = timezone.now()
             new_finding.last_reviewed_by = request.user
             tags = request.POST.getlist('tags')
             t = ", ".join(tags)
@@ -450,7 +466,7 @@ def edit_finding(request, fid):
 @user_passes_test(lambda u: u.is_staff)
 def touch_finding(request, fid):
     finding = get_object_or_404(Finding, id=fid)
-    finding.last_reviewed = datetime.now(tz=localtz)
+    finding.last_reviewed = timezone.now()
     finding.last_reviewed_by = request.user
     finding.save()
     return HttpResponseRedirect(reverse('view_finding', args=(finding.id,)))
@@ -466,7 +482,7 @@ def request_finding_review(request, fid):
         form = ReviewFindingForm(request.POST)
 
         if form.is_valid():
-            now = datetime.now(tz=localtz)
+            now = timezone.now()
             new_note = Notes()
 
             new_note.entry = "Review Request: " + form.cleaned_data['entry']
@@ -523,7 +539,7 @@ def clear_finding_review(request, fid):
         form = ClearFindingReviewForm(request.POST, instance=finding)
 
         if form.is_valid():
-            now = datetime.now(tz=localtz)
+            now = timezone.now()
             new_note = Notes()
             new_note.entry = "Review Cleared: " + form.cleaned_data['entry']
             new_note.author = request.user
